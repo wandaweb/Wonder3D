@@ -232,22 +232,6 @@ def run_pipeline(pipeline, cfg, single_image, guidance_scale, steps, seed, crop_
 
     normals_pred_out = []
     images_pred_out = []
-    #for i in range(bsz):
-       # ndarr = save_image(normals_pred[i])
-       # normals_pred_out.append(ndarr)
-       # im = Image.fromarray(ndarr)
-       # view = VIEWS[i]
-       # normal_filename = f"normals_000_{view}.png"
-       # im.save(f"outputs/out/{normal_filename}")
-        #im.save(f"outputs/out/normal{i}.png")
-
-    #for i in range(bsz):
-       # ndarr = save_image(images_pred[i])
-       # images_pred_out.append(ndarr)
-       # im = Image.fromarray(ndarr)
-       # view = VIEWS[i]
-       # rgb_filename = f"rgb_000_{view}.png"
-       # im.save(f"outputs/out/{rgb_filename}")
 
     num_views = bsz
     scene_dir = "outputs/out"
@@ -274,9 +258,6 @@ def run_pipeline(pipeline, cfg, single_image, guidance_scale, steps, seed, crop_
 
         save_image_numpy(rm_normal, os.path.join(scene_dir, normal_filename))
         save_image_numpy(rm_color, os.path.join(masked_colors_dir, rgb_filename))
-
-    #normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
-    #images_pred = [save_image(images_pred[i]) for i in range(bsz)]
 
     out = images_pred_out + normals_pred_out
     return out
