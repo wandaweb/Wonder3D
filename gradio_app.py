@@ -12,6 +12,7 @@ from rembg import remove
 from segment_anything import sam_model_registry, SamPredictor
 
 import os
+from os import path
 import sys
 import numpy
 import torch
@@ -31,15 +32,26 @@ from diffusers import AutoencoderKL, DDPMScheduler, DDIMScheduler
 from einops import rearrange
 import numpy as np
 
-
-
-
+VIEWS = ['front', 'front_right', 'right', 'back', 'left', 'front_left']
 
 def save_image(tensor):
     ndarr = tensor.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
     # pdb.set_trace()
     im = Image.fromarray(ndarr)
+
     return ndarr
+
+def save_image(tensor, fp):
+    ndarr = tensor.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+    # pdb.set_trace()
+    im = Image.fromarray(ndarr)
+    im.save(fp)
+    return ndarr
+
+def save_image_numpy(ndarr, fp):
+    im = Image.fromarray(ndarr)
+    im.save(fp)
+
 
 weight_dtype = torch.float16
 
@@ -62,6 +74,7 @@ if not hasattr(Image, 'Resampling'):
 
 def sam_init():
     sam_checkpoint = os.path.join(os.path.dirname(__file__), "sam_pt", "sam_vit_h_4b8939.pth")
+    #sam_checkpoint = "/kaggle/working/Wonder3D/sam_pt/sam_vit_h_4b8939.pth"
     model_type = "vit_h"
 
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint).to(device=f"cuda:{_GPU_ID}")
@@ -214,10 +227,58 @@ def run_pipeline(pipeline, cfg, single_image, guidance_scale, steps, seed, crop_
     normals_pred = out[:bsz]
     images_pred = out[bsz:]
 
-    normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
-    images_pred = [save_image(images_pred[i]) for i in range(bsz)]
+    if not path.exists("outputs/out"):
+        os.makedirs("outputs/out", exist_ok=True)
 
-    out = images_pred + normals_pred
+    normals_pred_out = []
+    images_pred_out = []
+    #for i in range(bsz):
+       # ndarr = save_image(normals_pred[i])
+       # normals_pred_out.append(ndarr)
+       # im = Image.fromarray(ndarr)
+       # view = VIEWS[i]
+       # normal_filename = f"normals_000_{view}.png"
+       # im.save(f"outputs/out/{normal_filename}")
+        #im.save(f"outputs/out/normal{i}.png")
+
+    #for i in range(bsz):
+       # ndarr = save_image(images_pred[i])
+       # images_pred_out.append(ndarr)
+       # im = Image.fromarray(ndarr)
+       # view = VIEWS[i]
+       # rgb_filename = f"rgb_000_{view}.png"
+       # im.save(f"outputs/out/{rgb_filename}")
+
+    num_views = bsz
+    scene_dir = "outputs/out"
+    normal_dir = os.path.join(scene_dir, "normals")
+    masked_colors_dir = os.path.join(scene_dir, "masked_colors")
+    os.makedirs(normal_dir, exist_ok=True)
+    os.makedirs(masked_colors_dir, exist_ok=True)
+    for j in range(num_views):
+        view = VIEWS[j]
+        idx = j
+        normal = normals_pred[idx]
+        color = images_pred[idx]
+
+        normal_filename = f"normals_000_{view}.png"
+        rgb_filename = f"rgb_000_{view}.png"
+        normal = save_image(normal, os.path.join(normal_dir, normal_filename))
+        color = save_image(color, os.path.join(scene_dir, rgb_filename))
+
+        normals_pred_out.append(normal)
+        images_pred_out.append(color)
+
+        rm_normal = remove(normal)
+        rm_color = remove(color)
+
+        save_image_numpy(rm_normal, os.path.join(scene_dir, normal_filename))
+        save_image_numpy(rm_color, os.path.join(masked_colors_dir, rgb_filename))
+
+    #normals_pred = [save_image(normals_pred[i]) for i in range(bsz)]
+    #images_pred = [save_image(images_pred[i]) for i in range(bsz)]
+
+    out = images_pred_out + normals_pred_out
     return out
 
 
@@ -281,7 +342,7 @@ def run_demo():
         gr.Markdown(_DESCRIPTION)
         with gr.Row(variant='panel'):
             with gr.Column(scale=1):
-                input_image = gr.Image(type='pil', image_mode='RGBA', height=320, label='Input image')
+                input_image = gr.Image(type='pil', image_mode='RGBA', height=320, label='Input image', tool=None)
 
                 example_folder = os.path.join(os.path.dirname(__file__), "./example_images")
                 example_fns = [os.path.join(example_folder, example) for example in os.listdir(example_folder)]
@@ -294,8 +355,8 @@ def run_demo():
                     examples_per_page=30
                 )
             with gr.Column(scale=1):
-                processed_image = gr.Image(type='pil', label="Processed Image", interactive=False, height=320, image_mode='RGBA', elem_id="disp_image")
-                processed_image_highres = gr.Image(type='pil', image_mode='RGBA', visible=False)
+                processed_image = gr.Image(type='pil', label="Processed Image", interactive=False, height=320, tool=None, image_mode='RGBA', elem_id="disp_image")
+                processed_image_highres = gr.Image(type='pil', image_mode='RGBA', visible=False, tool=None)
 
                 with gr.Accordion('Advanced options', open=True):
                     with gr.Row():
@@ -344,7 +405,7 @@ def run_demo():
                         outputs=[view_1, view_2, view_3, view_4, view_5, view_6, normal_1, normal_2, normal_3, normal_4, normal_5, normal_6]
                         )
         
-        demo.queue().launch(share=True, max_threads=80)
+        demo.queue().launch(share=False, max_threads=80)
 
 
 if __name__ == '__main__':
